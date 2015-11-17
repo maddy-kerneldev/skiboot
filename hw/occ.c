@@ -27,40 +27,12 @@
 #include <opal-api.h>
 #include <opal-msg.h>
 #include <timer.h>
+#include <nest.h>
 
 /* OCC Communication Area for PStates */
 
-#define P8_HOMER_SAPPHIRE_DATA_OFFSET	0x1F8000
-
-#define MAX_PSTATES 256
-
-#define chip_occ_data(chip) \
-		((struct occ_pstate_table *)(chip->homer_base + \
-				P8_HOMER_SAPPHIRE_DATA_OFFSET))
-
 static bool occ_reset;
 static struct lock occ_lock = LOCK_UNLOCKED;
-
-struct occ_pstate_entry {
-	s8 id;
-	u8 flags;
-	u8 vdd;
-	u8 vcs;
-	u32 freq_khz;
-};
-
-struct occ_pstate_table {
-	u8 valid;
-	u8 version;
-	u8 throttle;
-	s8 pstate_min;
-	s8 pstate_nom;
-	s8 pstate_max;
-	u8 spare1;
-	u8 spare2;
-	u64 reserved;
-	struct occ_pstate_entry pstates[MAX_PSTATES];
-};
 
 DEFINE_LOG_ENTRY(OPAL_RC_OCC_LOAD, OPAL_PLATFORM_ERR_EVT, OPAL_OCC,
 		OPAL_CEC_HARDWARE, OPAL_PREDICTIVE_ERR_GENERAL,

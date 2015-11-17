@@ -44,6 +44,7 @@
 #include <timer.h>
 #include <ipmi.h>
 #include <sensor.h>
+#include <nest.h>
 
 enum proc_gen proc_gen;
 
@@ -424,6 +425,7 @@ void __noreturn load_and_boot_kernel(bool is_reboot)
 	 * as possible to avoid delay.
 	 */
 	occ_pstates_init();
+	nest_pmu_init();
 
 	/* Set kernel command line argument if specified */
 #ifdef KERNEL_COMMAND_LINE
