@@ -107,8 +107,9 @@ static int detect_nest_units(struct dt_node *pt)
 void nest_pmu_init()
 {
         struct proc_chip *chip;
-	struct dt_node *dev, *chip_dev;
-	u64 addr = 0;
+	struct dt_node *dev, *chip_dev, *child, *dt_vpd;
+	u64 addr = 0, dimm_rate;
+	int no_dimms=0;
 
         dev = dt_new(dt_root, "nest-counters");
         if (!dev) {
@@ -147,12 +148,22 @@ void nest_pmu_init()
                                                         MURANO_CENTAUR_DIMM);
                         break;
                 case PROC_CHIP_P8_VENICE:
-                        dt_add_property_cells(chip_dev,"max-dimm-rate",
-                                                        VENICE_CENTAUR_DIMM);
-                        break;
                 case PROC_CHIP_P8_NAPLES:
-                        dt_add_property_cells(chip_dev,"max-dimm-rate",
-                                                        VENICE_CENTAUR_DIMM);
+			dt_vpd = dt_find_by_path(dt_root, "/vpd");
+			if (!dt_vpd)
+				break;
+
+			dt_for_each_child(dt_vpd, child) {
+				if(!strncmp(child->name, "dimm@", 5))
+					no_dimms++;
+			}
+
+			if (!no_dimms)
+				no_dimms=1;
+
+			dimm_rate = (VENICE_CENTAUR_DIMM * 4)/no_dimms;
+			dt_add_property_cells(chip_dev,"max-dimm-rate",
+							dimm_rate);
                         break;
                 default:
                         prerror("nest-counters: Unknown chip type, skipping dimm file\n");
