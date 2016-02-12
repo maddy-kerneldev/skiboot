@@ -27,6 +27,8 @@
 #include <io.h>
 #include <platform.h>
 
+#define MAX_NAME_SIZE	64
+
 /*
  * Pointer holding the Catalog file in memory
  */
@@ -39,6 +41,157 @@ struct nest_catalog_desc *catalog_desc;
  * to help the search later.
  */
 struct nest_catalog_page_0 *page0_desc;
+
+static u32 get_chip_event_offset(int idx, int domain)
+{
+	char *marker;
+	struct nest_catalog_events_data *ev;
+	int i;
+
+	if (domain == DOMAIN_CHIP)
+		marker = CHIP_EVENT_ENTRY(catalog_desc);
+	else
+		marker = CORE_EVENT_ENTRY(catalog_desc);
+
+	ev = (struct nest_catalog_events_data *)marker;
+	for (i = 0; i < idx ; i++) {
+		marker += ev->length;
+		ev = (struct nest_catalog_events_data *)marker;
+	}
+
+	return (ev->event_group_record_offs + ev->event_counter_offs);
+}
+
+static int dt_create_nest_unit_events(struct dt_node *pt, int index, u32 offset,
+					const char *name, const char *scale,
+					const char *unit)
+{
+	struct dt_node *type;
+
+	/*
+	 * Create an event node to pass event information.
+	 * "reg" property is must for event and rest of the properties
+	 * such as id, scale, unit are optional.
+	 */
+	type = dt_new_addr(pt, name, offset);
+	if (!type)
+		return -1;
+
+	/*
+	 * "reg" property:
+	 *
+	 * event offset where counter data gets accumulated
+	 */
+	dt_add_property_cells(type, "reg", offset, sizeof(u64));
+
+	/*
+	 * "id" property:
+	 *
+	 * event id to be appended to the event name. In some units like abus,
+	 * we have events such as abus0, abus1 and abus2. Since having numbers
+	 * in the dt node name are not suggested, we pass these numbers as
+	 * id peroperty.
+	 */
+	if (index >= 0)
+		 dt_add_property_cells(type, "id", index);
+
+	/*
+	 * "unit" and "scale" property:
+	 *
+	 * unit and scale properties, when used on raw counter value,
+	 * provide metric information.
+	 */
+	if (unit)
+		dt_add_property_string(type, "unit", unit);
+
+	if (scale)
+		dt_add_property_string(type, "scale", scale);
+
+	return 0;
+}
+
+static int dt_create_nest_mcs_node(struct dt_node *pt,
+		struct nest_catalog_group_data *gptr, const char *name)
+{
+	struct dt_node *type;
+	int idx;
+	u32 offset;
+	const char *unit = "MiB", *scale = "1.2207e-4";
+
+	type = dt_new(pt, name);
+	if (!type) {
+		prlog(PR_ERR, "nest_counters: %s type creation failed\n", name);
+		return -1;
+	}
+
+	dt_add_property_cells(type, "#address-cells", 1);
+	dt_add_property_cells(type, "#size-cells", 1);
+	dt_add_property(type, "ranges", NULL, 0);
+
+	for (idx = 0; idx < (gptr->event_count / 2); idx++) {
+		offset = get_chip_event_offset(gptr->event_index[idx],
+								DOMAIN_CHIP);
+		if (dt_create_nest_unit_events(type, idx, offset, "mcs", scale, unit))
+			return -1;
+	}
+
+	return 0;
+}
+
+/*
+ * Wrapper function to call corresponding nest unit functions
+ * for event dt creation. Not all the chip groups in the catalog are
+ * supported at this point.
+ */
+static int dt_create_nest_unit(struct dt_node *ima,
+				struct nest_catalog_group_data *gptr)
+{
+	char *name;
+
+	/*
+	 * Names provided in the catalog for each nest group/unit are
+	 * not valid device tree node names.
+	 */
+	const char mcs_read[] = "mcs_read", mcs_write[] = "mcs_write";
+
+	name = malloc(gptr->group_name_len);
+	if (!name)
+		return OPAL_NO_MEM;
+
+	memcpy((void *)name, (void *)gptr->remainder, gptr->group_name_len);
+	if (strstr(name, "MCS_Read_BW")) {
+		if (dt_create_nest_mcs_node(ima, gptr, mcs_read))
+			goto out;
+	} else if (strstr(name, "MCS_Write_BW")) {
+		if (dt_create_nest_mcs_node(ima, gptr, mcs_write))
+			goto out;
+	} else
+		free(name);
+
+	return OPAL_SUCCESS;
+out:
+	free(name);
+	return OPAL_RESOURCE;
+}
+
+static int detect_nest_units(struct dt_node *ima)
+{
+	struct nest_catalog_group_data *group_ptr;
+	char *marker;
+	int rc = CHIP_EVENTS_NOT_SUPPORTED;
+
+	marker = CHIP_GROUP_ENTRY(catalog_desc);
+	group_ptr = (struct nest_catalog_group_data *)marker;
+        while(group_ptr->domain == DOMAIN_CHIP) {
+		rc = dt_create_nest_unit(ima, group_ptr);
+		if (rc)
+			break;
+		marker += group_ptr->length;
+		group_ptr = (struct nest_catalog_group_data *)marker;
+	};
+
+	return rc;
+}
 
 int preload_catalog_lid()
 {
@@ -173,6 +326,13 @@ void nest_pmu_init(int loaded)
 		dt_add_property_cells(chip_dev, "#size-cells", 1);
 		dt_add_property_cells(chip_dev, "ranges", 0, hi32(addr),
 						lo32(addr), SLW_IMA_SIZE);
+
+		/*
+		 * Now parse catalog and add nest units and their events
+		 * to the device tree.
+		 */
+		if (detect_nest_units(chip_dev))
+			goto fail;
 	}
 
 	return;
