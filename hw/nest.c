@@ -42,6 +42,23 @@ struct nest_catalog_desc *catalog_desc;
  */
 struct nest_catalog_page_0 *page0_desc;
 
+static bool is_P8_proc(void)
+{
+	struct proc_chip *chip;
+
+	chip = get_chip(this_cpu()->chip_id);
+	switch(chip->type) {
+	case PROC_CHIP_P8_MURANO:
+	case PROC_CHIP_P8_VENICE:
+	case PROC_CHIP_P8_NAPLES:
+		return true;
+	default:
+		break;
+	}
+
+	return false;
+}
+
 static u32 get_chip_event_offset(int idx, int domain)
 {
 	char *marker;
@@ -174,6 +191,44 @@ static int dt_create_nest_powerbus_node(struct dt_node *pt,
 	return 0;
 }
 
+static int dt_create_nest_abus_xbus_node(struct dt_node *pt,
+		struct nest_catalog_group_data *gptr, const char *name)
+{
+	struct dt_node *type;
+	int idx;
+	u32 offset;
+	const char *unit = "MiB", *scale = "7.629e-6";
+
+	type = dt_new(pt, name);
+	if (!type) {
+		prlog(PR_ERR, "nest_counters: %s type creation failed\n", name);
+		return -1;
+	}
+	dt_add_property_cells(type, "#address-cells", 1);
+	dt_add_property_cells(type, "#size-cells", 1);
+	dt_add_property(type, "ranges", NULL, 0);
+
+	for(idx = 0; idx < 3; idx++) {
+		offset = get_chip_event_offset(gptr->event_index[idx],
+								DOMAIN_CHIP);
+		if (strstr(name, "abus"))
+			dt_create_nest_unit_events(type, idx, offset,
+						"abus", scale, unit);
+		else if (strstr(name, "xbus")) {
+			/*
+			 * Power8 uses xbus[0,1,3] and not xbus2,
+			 * So skipping it.
+			 */
+			if ((idx == 2) && is_P8_proc())
+				idx = 3;
+			dt_create_nest_unit_events(type, idx, offset,
+						"xbus", scale, unit);
+		}
+	}
+
+	return 0;
+}
+
 /*
  * Wrapper function to call corresponding nest unit functions
  * for event dt creation. Not all the chip groups in the catalog are
@@ -189,7 +244,7 @@ static int dt_create_nest_unit(struct dt_node *ima,
 	 * not valid device tree node names.
 	 */
 	const char mcs_read[] = "mcs_read", mcs_write[] = "mcs_write";
-	const char pb[] = "powerbus";
+	const char pb[] = "powerbus", ab[]="abus", xb[] = "xbus";
 
 	name = malloc(gptr->group_name_len);
 	if (!name)
@@ -204,6 +259,12 @@ static int dt_create_nest_unit(struct dt_node *ima,
 			goto out;
 	} else if (strstr(name, "PowerBus_BW")) {
 		if (dt_create_nest_powerbus_node(ima, gptr, pb))
+			goto out;
+	} else if (strstr(name, "A-link_data")) {
+		if (dt_create_nest_abus_xbus_node(ima, gptr, ab))
+			goto out;
+	} else if (strstr(name, "X-link_data")) {
+		if (dt_create_nest_abus_xbus_node(ima, gptr, xb))
 			goto out;
 	} else
 		free(name);
