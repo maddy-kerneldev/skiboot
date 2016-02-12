@@ -138,6 +138,42 @@ static int dt_create_nest_mcs_node(struct dt_node *pt,
 	return 0;
 }
 
+static int dt_create_nest_powerbus_node(struct dt_node *pt,
+			struct nest_catalog_group_data *gptr, const char *name)
+{
+	struct dt_node *type;
+	u32 offset;
+	const char *unit = "MiB", *scale = "4.883e-4";
+
+	type = dt_new(pt, name);
+	if (!type) {
+		prlog(PR_ERR, "nest_counters: %s type creation failed\n", name);
+		return -1;
+	}
+
+	dt_add_property_cells(type, "#address-cells", 1);
+	dt_add_property_cells(type, "#size-cells", 1);
+	dt_add_property(type, "ranges", NULL, 0);
+
+	/* Catalog names for events are not valid device tree names */
+	offset = get_chip_event_offset(gptr->event_index[0], DOMAIN_CHIP);
+	dt_create_nest_unit_events(type, -1, offset, "pb_cycles", NULL, NULL);
+
+	offset = get_chip_event_offset(gptr->event_index[1], DOMAIN_CHIP);
+	dt_create_nest_unit_events(type, -1, offset, "total_retries_dinc",
+								NULL, NULL);
+
+	offset = get_chip_event_offset(gptr->event_index[2], DOMAIN_CHIP);
+	dt_create_nest_unit_events(type, -1, offset, "internal_bw", scale,
+									unit);
+
+	offset = get_chip_event_offset(gptr->event_index[3], DOMAIN_CHIP);
+	dt_create_nest_unit_events(type, -1, offset, "external_bw", scale,
+									unit);
+
+	return 0;
+}
+
 /*
  * Wrapper function to call corresponding nest unit functions
  * for event dt creation. Not all the chip groups in the catalog are
@@ -153,6 +189,7 @@ static int dt_create_nest_unit(struct dt_node *ima,
 	 * not valid device tree node names.
 	 */
 	const char mcs_read[] = "mcs_read", mcs_write[] = "mcs_write";
+	const char pb[] = "powerbus";
 
 	name = malloc(gptr->group_name_len);
 	if (!name)
@@ -164,6 +201,9 @@ static int dt_create_nest_unit(struct dt_node *ima,
 			goto out;
 	} else if (strstr(name, "MCS_Write_BW")) {
 		if (dt_create_nest_mcs_node(ima, gptr, mcs_write))
+			goto out;
+	} else if (strstr(name, "PowerBus_BW")) {
+		if (dt_create_nest_powerbus_node(ima, gptr, pb))
 			goto out;
 	} else
 		free(name);
