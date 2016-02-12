@@ -115,10 +115,69 @@ int load_catalog_lid(int loaded)
 
 void nest_pmu_init(int loaded)
 {
+	struct proc_chip *chip;
+	struct dt_node *dev, *chip_dev;
+	u64 addr = 0;
 
 	if (load_catalog_lid(loaded) != OPAL_SUCCESS) {
 		prerror("nest-counters: Catalog failed to load\n");
 		return;
 	}
 
+	/*
+	 * Now that we have catalog loaded and verified for nest counter
+	 * support, lets create device tree entries.
+	 *
+	 * Top level device node called "nest-counters" created under
+	 * "/" root folder to contain all the nest unit information
+	 */
+	dev = dt_new(dt_root, "nest-counters");
+	if (!dev) {
+		prerror("nest-counters: device node creation failed\n");
+		return;
+	}
+
+	dt_add_property_strings(dev, "compatible", "ibm,opal-in-memory-counters");
+	dt_add_property_cells(dev, "#address-cells", 2);
+	dt_add_property_cells(dev, "#size-cells", 2);
+	dt_add_property(dev, "ranges", NULL, 0);
+
+	/*
+	 * Top level device node "nest-counters" will have per-chip nodes.
+	 * Each chip node will have slw ima offset and the nest pmu
+	 * units details.
+	 *
+	 * pore_slw_ima firmware will program nest counters with
+	 * pre-defined set of events (provided in catalog) and accumulate
+	 * counter data in a fixed homer offset called
+	 * "SLW 24x7 Counters Data Area (per chip)". This offset detail
+	 * provide in the range field.
+	 *
+	 * For homer memory layout refer "p8_homer_map.h" in hostboot git tree
+	 * of open-power github
+	 */
+	for_each_chip(chip) {
+		addr = chip->homer_base + SLW_IMA_OFFSET;
+		chip_dev = dt_new_addr(dev, "chip", addr);
+		if (!chip_dev) {
+			prerror("nest-counters:chip node creation failed\n");
+			goto fail;
+		}
+
+		/*
+		 *TODO: Need to fix phandle property to point to "reserved-
+		 * memory" node for HOMER.
+		 */
+		dt_add_property_cells(chip_dev, "ibm,chip-id", chip->id);
+		dt_add_property_cells(chip_dev, "#address-cells", 1);
+		dt_add_property_cells(chip_dev, "#size-cells", 1);
+		dt_add_property_cells(chip_dev, "ranges", 0, hi32(addr),
+						lo32(addr), SLW_IMA_SIZE);
+	}
+
+	return;
+
+fail:
+	dt_free(dev);
+	return;
 }
