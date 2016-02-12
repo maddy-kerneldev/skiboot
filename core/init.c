@@ -44,6 +44,7 @@
 #include <timer.h>
 #include <ipmi.h>
 #include <sensor.h>
+#include <nest.h>
 
 enum proc_gen proc_gen;
 
@@ -552,6 +553,8 @@ static void do_ctors(void)
 
 void __noreturn main_cpu_entry(const void *fdt, u32 master_cpu)
 {
+	int loaded;
+
 	/*
 	 * WARNING: At this point. the timebases have
 	 * *not* been synchronized yet. Do not use any timebase
@@ -711,12 +714,18 @@ void __noreturn main_cpu_entry(const void *fdt, u32 master_cpu)
 	if (platform.init)
 		platform.init();
 
+	/* Start Nest pmu catalog lid loading */
+	loaded = preload_catalog_lid();
+
 	/* Setup dummy console nodes if it's enabled */
 	if (dummy_console_enabled())
 		dummy_console_add_nodes();
 
 	/* Init SLW related stuff, including fastsleep */
 	slw_init();
+
+	/* Init Nest PMU unit */
+	nest_pmu_init(loaded);
 
 	op_display(OP_LOG, OP_MOD_INIT, 0x0002);
 

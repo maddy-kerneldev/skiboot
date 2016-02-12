@@ -116,6 +116,7 @@ static u64 fsp_hir_timeout;
 #define KERNEL_LID_PHYP			0x80a00701
 #define KERNEL_LID_OPAL			0x80f00101
 #define INITRAMFS_LID_OPAL		0x80f00102
+#define NEST_CATALOG_LID		0x81e00610
 
 /*
  * We keep track on last logged values for some things to print only on
@@ -2236,6 +2237,7 @@ static struct {
 	{ RESOURCE_ID_CAPP,	CAPP_IDX_MURANO_DD21,	0x80a02001 },
 	{ RESOURCE_ID_CAPP,	CAPP_IDX_VENICE_DD10,	0x80a02003 },
 	{ RESOURCE_ID_CAPP,	CAPP_IDX_VENICE_DD20,	0x80a02004 },
+	{ RESOURCE_ID_CATALOG,	RESOURCE_SUBID_NONE,	NEST_CATALOG_LID},
 };
 
 static void fsp_start_fetching_next_lid(void);
