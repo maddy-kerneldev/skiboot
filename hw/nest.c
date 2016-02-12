@@ -442,3 +442,24 @@ fail:
 	dt_free(dev);
 	return;
 }
+
+static int64_t opal_nest_counters_control(uint64_t mode, uint64_t value_1,
+					uint64_t value_2, uint64_t value_3)
+{
+	struct proc_chip *chip;
+	u64 op;
+
+	chip = get_chip(this_cpu()->chip_id);
+	if (mode == IMA_CHIP_PRODUCTION_MODE &&
+		!value_2 && !value_3) {
+		op = value_1 ? IMA_PTS_ENABLE: IMA_PTS_DISABLE;
+		xscom_write(chip->id, IMA_PTS_SCOM, op);
+	} else {
+		/* Unknown SLW IMA mode */
+		return IMA_PTS_ERROR;
+	}
+
+	return OPAL_SUCCESS;
+}
+opal_call(OPAL_NEST_COUNTERS_CONTROL, opal_nest_counters_control, 4);
+

@@ -1,0 +1,37 @@
+OPAL_NEST_COUNTERS_CONTROL
+----------------------
+
+OPAL call interface for nest instrumentation support.
+Today, the interface supports start and stop of pore slw ima
+(Power On Reset Engine SLeep Wink In Memory Accumulator) engine for
+nest instrumentation from Host OS. But it can be extended.
+
+OPAL_NEST_COUNTERS_CONTROL call accepts four parameters:
+
+	Mode (uint64_t):
+		Currently, only production mode is supported.
+		The "IMA_CHIP_PRODUCTION_MODE" macro defined in "nest.h"
+		is used for this.
+
+	Value_1 (uint64_t):
+		-For "IMA_CHIP_PRODUCTION_MODE" mode, this parameter is used
+		to start and stop the pore_slw_ima engine.
+		0x0 -- Stop
+		0x1 -- Start
+
+		-For other modes, this parameter is undefined for now.
+
+	Value_2 (uint64_t):
+		- For "IMA_CHIP_PRODUCTION_MODE" mode, this parameter should be
+		  zero.
+
+		-For other modes, this parameter is undefined for now.
+
+	Value_3 (uint64_t):
+		- For "IMA_CHIP_PRODUCTION_MODE" mode, this parameter should be
+		  zero.
+
+		-For other modes, this parameter is undefined for now.
+
+OPAL_NEST_COUNTERS_CONTROL will return:
+	OPAL_SUCCESS on success and IMA_PTS_ERROR on failure.
