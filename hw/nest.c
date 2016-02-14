@@ -341,14 +341,6 @@ int load_catalog_lid(int loaded)
 	}
 
 	/*
-	 * Check for Chip event support in this catalog.
-	 */
-	if (page0_desc->chip_group_offset == 0) {
-		prerror("nest-counters: Not Supported \n");
-		return OPAL_UNSUPPORTED;
-	}
-
-	/*
 	 * Lets save some entry points to help out search
 	 */
 	GROUP_ENTRY(catalog_desc) = CATALOG(catalog_desc) +
