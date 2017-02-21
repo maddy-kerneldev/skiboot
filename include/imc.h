@@ -122,4 +122,5 @@ struct imc_chip_cb
 #define MAX_AVL		48
 /* Reserved bits : 48-64 */
 
+void imc_init(void);
 #endif /* __IMC_H */

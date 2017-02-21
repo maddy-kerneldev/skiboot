@@ -47,6 +47,7 @@
 #include <nvram.h>
 #include <libstb/stb.h>
 #include <libstb/container.h>
+#include <imc.h>
 
 enum proc_gen proc_gen;
 
@@ -914,6 +915,9 @@ void __noreturn __nomcount main_cpu_entry(const void *fdt)
 
 	/* Init SLW related stuff, including fastsleep */
 	slw_init();
+
+	/* Init In-Memory Collection related stuff (load the IMC dtb into memory) */
+	imc_init();
 
 	op_display(OP_LOG, OP_MOD_INIT, 0x0002);
 
