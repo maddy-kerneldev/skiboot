@@ -271,6 +271,7 @@ extern void prd_tmgt_interrupt(uint32_t proc);
 extern void prd_occ_reset(uint32_t proc);
 extern void prd_init(void);
 extern void prd_register_reserved_memory(void);
+extern void homer_fixup_dt(void);
 
 /* Flatten device-tree */
 extern void *create_dtb(const struct dt_node *root, bool exclusive);

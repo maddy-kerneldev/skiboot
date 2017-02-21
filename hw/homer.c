@@ -116,6 +116,36 @@ static void homer_init_chip(struct proc_chip *chip)
 	}
 }
 
+void homer_fixup_dt(void)
+{
+	struct mem_region *region;
+	struct proc_chip *chip;
+
+	lock(&mem_region_lock);
+
+	for (region = mem_region_next(NULL); region;
+	     region = mem_region_next(region)) {
+		if (region->type != REGION_HW_RESERVED)
+			continue;
+
+		if (!region->node)
+			continue;
+
+		if (strncmp("ibm,homer-image",
+			    region->node->name, strlen("ibm,homer-image")))
+			continue;
+
+		for_each_chip(chip) {
+			if (region->start == chip->homer_base) {
+				dt_add_property_cells(region->node,
+						      "ibm,chip-id", chip->id);
+				break;
+			}
+		}
+	}
+	unlock(&mem_region_lock);
+}
+
 void homer_init(void)
 {
 	struct proc_chip *chip;

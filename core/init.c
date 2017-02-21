@@ -968,6 +968,9 @@ void __noreturn __nomcount main_cpu_entry(const void *fdt)
 
 	prd_register_reserved_memory();
 
+	/* Add ibm,chip-id porperty to homer reserved region */
+	homer_fixup_dt();
+
 	load_and_boot_kernel(false);
 }
 
