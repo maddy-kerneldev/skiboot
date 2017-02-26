@@ -56,7 +56,7 @@ static struct dt_node *new_node(const char *name)
 	list_head_init(&node->properties);
 	list_head_init(&node->children);
 	/* FIXME: locking? */
-	node->phandle = ++last_phandle;
+	node->phandle = increment_return_last_phandle();
 	return node;
 }
 
@@ -419,7 +419,7 @@ struct dt_property *dt_add_property(struct dt_node *node,
 		assert(size == 4);
 		node->phandle = *(const u32 *)val;
 		if (node->phandle >= last_phandle)
-			last_phandle = node->phandle;
+			update_last_phandle(node->phandle);
 		return NULL;
 	}
 
