@@ -47,6 +47,22 @@ struct dt_node {
 	u32 phandle;
 };
 
+/*
+ * Data structure for device tree fixup functions
+ */
+struct dt_fixup_p {
+	u32 events;
+	struct list_head children;
+};
+
+struct dt_fixup_c {
+	u32 events;
+	const char *name;
+	struct dt_node *node;
+	struct list_node list;
+	struct list_head children;
+};
+
 /* This is shared with device_tree.c .. make it static when
  * the latter is gone (hopefully soon)
  */
@@ -262,5 +278,10 @@ u64 dt_translate_address(const struct dt_node *node, unsigned int index,
  * tree. This is mainly here for testing.
  */
 int dt_cmp_subnodes(const struct dt_node *a,  const struct dt_node *b);
+
+/* Helpers for dt phandle fixup */
+void dt_fixup_list_free(struct dt_fixup_p *parent);
+int dt_fixup_phandle(struct dt_node *dev, struct dt_fixup_p *parent);
+int dt_fixup_populate_llist(struct dt_node *lr_node, struct dt_fixup_p *parent, const char *name);
 
 #endif /* __DEVICE_H */

@@ -849,6 +849,116 @@ void dt_expand(const void *fdt)
 		abort();
 }
 
+/*
+ * Helper to free malloced dt_fixup _list_ variables
+ */
+void dt_fixup_list_free(struct dt_fixup_p *parent)
+{
+	struct dt_fixup_c *cptr, *ccptr;
+
+	list_for_each(&parent->children, cptr, list) {
+		list_for_each(&cptr->children, ccptr, list)
+			free(ccptr);
+		free(cptr);
+	}
+}
+
+/*
+ * Function to capture the "property" and the node
+ * that needs phandle fixup via _list_
+ *
+ * Function first parser the new subtree for a "property"
+ * and adds to a _list_. If the "property" supports more than
+ * one "phandle" value, then the _list_ becomes 2D. i.e,
+ * say the "property" here is "events",
+ *
+ * <parent>
+ *    |
+ * <events <1> > - <node 1> - <node 2> -- <node n>
+ *    |
+ * <events <2> > - <node 1> - <node 2> -- <node n>
+ *    |
+ * <events <n> > - <node 1> - <node 2> -- <node n>
+ *
+ * < node *>  have events "property" and needs an
+ * update after phandle change.
+ */
+int dt_fixup_populate_llist(struct dt_node *lr_node, struct dt_fixup_p *parent, const char *name)
+{
+	u32 ev_value;
+	struct dt_fixup_c *cptr, *ccptr;
+	bool flag = true;
+	struct dt_node *node;
+
+	/* Initialize */
+	list_head_init(&parent->children);
+
+	/* Loop through each node in the subtree */
+	dt_for_each_node(lr_node, node) {
+		/* Look for the given "property */
+		if (dt_find_property(node, name)) {
+			/* extract the "phandle" value */
+			ev_value = dt_prop_get_u32(node, name);
+			list_for_each(&parent->children, cptr, list) {
+				if (cptr->events == ev_value) {
+					flag = false;
+					/* Grow the list horizontally */
+					ccptr = malloc(sizeof(struct dt_fixup_c));
+					if (!ccptr)
+						return -ENOMEM;
+
+					/* capture information */
+					ccptr->node = node;
+					ccptr->name = name;
+					list_add(&cptr->children, &ccptr->list);
+					break;
+				}
+			}
+			if (flag){
+				cptr = malloc(sizeof(struct dt_fixup_c));
+				if (!cptr)
+					return -ENOMEM;
+
+				cptr->events = ev_value;
+				cptr->node = node;
+
+				/* Grow the list vertically */
+				list_add(&parent->children, &cptr->list);
+				list_head_init(&cptr->children);
+				ccptr = malloc(sizeof(struct dt_fixup_c));
+				if (!ccptr)
+					return -ENOMEM;
+
+				ccptr->node = node;
+				ccptr->name = name;
+				list_add(&cptr->children, &ccptr->list);
+			}
+			flag = true;
+		}
+	}
+
+	return 0;
+}
+
+int dt_fixup_phandle(struct dt_node *dev, struct dt_fixup_p *parent)
+{
+	struct dt_node *node;
+	struct dt_property *prop;
+	struct dt_fixup_c *cptr, *ccptr;
+
+	list_for_each(&parent->children, cptr, list) {
+		node = dt_find_by_phandle(dev, cptr->events);
+		if (node->phandle == cptr->events) {
+			node->phandle = increment_return_last_phandle();
+			list_for_each(&cptr->children, ccptr, list) {
+				prop = __dt_find_property(ccptr->node, "events");
+				memcpy(prop->prop, &node->phandle, prop->len);
+			}
+		}
+	}
+	return 0;
+}
+
 u64 dt_get_number(const void *pdata, unsigned int cells)
 {
 	const u32 *p = pdata;
