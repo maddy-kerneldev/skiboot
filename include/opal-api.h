@@ -201,7 +201,9 @@
 #define OPAL_XIVE_RESERVED3			143
 #define OPAL_XIVE_RESERVED4			144
 #define OPAL_SIGNAL_SYSTEM_RESET		145
-#define OPAL_LAST				145
+#define OPAL_NEST_IMC_COUNTERS_CONTROL		146
+#define OPAL_CORE_IMC_COUNTERS_CONTROL		147
+#define OPAL_LAST				147
 
 /* Device tree flags */
 
@@ -1136,6 +1138,19 @@ enum {
 	XIVE_DUMP_TM_USER	= 3,
 	XIVE_DUMP_VP		= 4,
 	XIVE_DUMP_EMU_STATE	= 5,
+};
+
+/* Operation argument to Nest IMC Microcode */
+enum {
+	OPAL_NEST_IMC_STOP,
+	OPAL_NEST_IMC_START,
+};
+
+/* Operation argument to Core IMC */
+enum {
+	OPAL_CORE_IMC_DISABLE,
+	OPAL_CORE_IMC_ENABLE,
+	OPAL_CORE_IMC_INIT,
 };
 
 #endif /* __ASSEMBLY__ */

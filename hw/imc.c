@@ -78,6 +78,28 @@ char const *nest_pmus[] = {
 };
 
 
+#define CORE_IMC_OP_DISABLE 0
+#define CORE_IMC_OP_ENABLE 1
+
+/*
+ * A Quad contains 4 cores in Power 9, and there are 4 addresses for
+ * the CHTM attached to each core.
+ * So, for core index 0 to core index 3, we have a sequential range of
+ * SCOM port addresses in the arrays below, each for PDBAR and HTM mode.
+ */
+unsigned int pdbar_scom_index[] = {
+	0x1001220B,
+	0x1001230B,
+	0x1001260B,
+	0x1001270B
+};
+unsigned int htm_scom_index[] = {
+	0x10012200,
+	0x10012300,
+	0x10012600,
+	0x10012700
+};
+
 static struct imc_chip_cb *get_imc_cb(void)
 {
 	uint64_t cb_loc;
@@ -255,3 +277,186 @@ err:
 	prerror("IMC Devices not added\n");
 	free(buf);
 }
+
+/*
+ * opal_nest_imc_counters_control : This call controls the nest IMC microcode.
+ *
+ * mode      : For now, this call supports only NEST_IMC_PRODUCTION_MODE.
+ *             This mode can start/stop the Nest IMC Microcode for nest
+ *             instrumentation from Host OS.
+ * operation : Start(0x0) or Stop(0x1) the engine.
+ *
+ * This call can be extended to include more operations to use the multiple
+ * debug modes provided by the nest IMC microcode and the parameters value_1
+ * and value_2 for the same purpose.
+ */
+static int64_t opal_nest_imc_counters_control(uint64_t mode,
+					      uint64_t operation,
+					      uint64_t value_1,
+					      uint64_t value_2)
+{
+	u64 op, status;
+	struct imc_chip_cb *cb;
+
+	if ((mode != NEST_IMC_PRODUCTION_MODE) || value_1 || value_2)
+		return OPAL_PARAMETER;
+
+	/* Fetch the IMC control block structure */
+	cb = get_imc_cb();
+	status = be64_to_cpu(cb->imc_chip_run_status);
+
+	switch (operation) {
+	case OPAL_NEST_IMC_STOP:
+		/* Check whether the engine is already stopped */
+		if (status == NEST_IMC_PAUSE)
+			return OPAL_SUCCESS;
+
+		op = NEST_IMC_DISABLE;
+		break;
+	case OPAL_NEST_IMC_START:
+		/* Check whether the engine is already running */
+		if (status == NEST_IMC_RESUME)
+			return OPAL_SUCCESS;
+
+		op = NEST_IMC_ENABLE;
+		break;
+	default:
+		prerror("IMC: unknown operation for nest imc\n");
+		return OPAL_PARAMETER;
+	}
+
+	/* Write the command to the control block now */
+	cb->imc_chip_command = op;
+
+	return OPAL_SUCCESS;
+}
+
+opal_call(OPAL_NEST_IMC_COUNTERS_CONTROL, opal_nest_imc_counters_control, 4);
+
+static int opal_core_imc_counters_switch(uint64_t op)
+{
+	struct proc_chip *chip;
+	int ret = -1, core_id, phys_core_id;
+
+	chip = get_chip(this_cpu()->chip_id);
+	phys_core_id = cpu_get_core_index(this_cpu());
+	core_id = phys_core_id % 4;
+
+	if (op == CORE_IMC_OP_DISABLE)
+		ret = xscom_write(chip->id,
+				  XSCOM_ADDR_P9_EP(phys_core_id,
+						   htm_scom_index[core_id]),
+				  (u64) CORE_IMC_HTM_MODE_DISABLE);
+	else if (op == CORE_IMC_OP_ENABLE)
+		ret = xscom_write(chip->id,
+				  XSCOM_ADDR_P9_EP(phys_core_id,
+						   htm_scom_index[core_id]),
+				  htm_scom_index[core_id]);
+
+	if (ret < 0) {
+		prerror("IMC: error in xscom_write for htm_mode\n");
+		return OPAL_HARDWARE;
+	}
+
+	return OPAL_SUCCESS;
+}
+
+static int opal_core_imc_counters_init(uint64_t addr)
+{
+	struct proc_chip *chip;
+	int ret, core_id, phys_core_id;
+
+	chip = get_chip(this_cpu()->chip_id);
+	phys_core_id = cpu_get_core_index(this_cpu());
+	core_id = phys_core_id % 4;
+
+	ret = xscom_write(chip->id,
+			  XSCOM_ADDR_P9_EP(phys_core_id,
+					   pdbar_scom_index[core_id]),
+			  (u64)(CORE_IMC_PDBAR_MASK & addr));
+	if (ret < 0) {
+		prerror("IMC: error in xscom_write for pdbar\n");
+		goto hw_err;
+	}
+
+	ret = xscom_write(chip->id,
+			  XSCOM_ADDR_P9_EC(phys_core_id,
+					   CORE_IMC_EVENT_MASK_ADDR),
+			  (u64)CORE_IMC_EVENT_MASK);
+	if (ret < 0) {
+		prerror("IMC: error in xscom_write for event mask\n");
+		goto hw_err;
+	}
+
+	ret = xscom_write(chip->id,
+			  XSCOM_ADDR_P9_EP(phys_core_id,
+					   htm_scom_index[core_id]),
+			  (u64)CORE_IMC_HTM_MODE_ENABLE);
+	if (ret < 0) {
+		prerror("IMC: error in xscom_write for htm mode\n");
+		goto hw_err;
+	}
+
+	return OPAL_SUCCESS;
+hw_err:
+	ret = OPAL_HARDWARE;
+	return ret;
+}
+
+/*
+ * opal_core_imc_counters_control : Controls the Core IMC counters.
+ *
+ * operation : For now, this call supports only OPAL_CORE_IMC_INIT,
+ *             OPAL_CORE_IMC_DISABLE and OPAL_CORE_IMC_ENABLE operations.
+ *
+ *             OPAL_CORE_IMC_INIT initializes core IMC Engine for the
+ *             current core, by initializing the pdbars, htm_mode,
+ *             and the event_mask. "addr" must be non-zero for this operation.
+ *
+ *             OPAL_CORE_IMC_ENABLE enables the core imc engine by
+ *             appropriately setting bits 4-9 of the HTM_MODE scom port. No
+ *             initialization is done in this call. This just enables the
+ *             the counters to count with the previous initialization.
+ *
+ *             OPAL_CORE_IMC_DISABLE disables the core imc engine by clearing
+ *             bits 4-9 of the HTM_MODE scom port.
+ *
+ * addr      : Contains per-core physical address. This is the memory
+ *	       address where the core IMC engine writes the counter values.
+ *             Must be non-zero for CORE_IMC_INIT and zero for
+ *             CORE_IMC_DISABLE and CORE_IMC_ENABLE operations.
+ *
+ * This call can be extended to include other operations in "operation" and
+ * the  other two parameters value_1 and value_2 are provided in case, they
+ * are needed in future. For now, they are unused and must be zero.
+ */
+static int64_t opal_core_imc_counters_control(uint64_t operation,
+					      uint64_t addr,
+					      uint64_t value_1,
+					      uint64_t value_2)
+{
+	int ret = OPAL_PARAMETER;
+
+	if (value_1 || value_2)
+		return ret;
+
+	switch (operation) {
+	case OPAL_CORE_IMC_DISABLE:
+		if (!addr)
+			ret = opal_core_imc_counters_switch(CORE_IMC_OP_DISABLE);
+		break;
+	case OPAL_CORE_IMC_ENABLE:
+		if (!addr)
+			ret = opal_core_imc_counters_switch(CORE_IMC_OP_ENABLE);
+		break;
+	case OPAL_CORE_IMC_INIT:
+		if (addr)
+			ret = opal_core_imc_counters_init(addr);
+		break;
+	default:
+		ret = OPAL_PARAMETER;
+	}
+
+	return ret;
+}
+opal_call(OPAL_CORE_IMC_COUNTERS_CONTROL, opal_core_imc_counters_control, 4);
