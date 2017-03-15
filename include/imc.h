@@ -44,6 +44,7 @@
 #define P9_CB_STRUCT_OFFSET		0x18FC00
 #define P9_CB_STRUCT_CMD		0x18FC08
 #define P9_CB_STRUCT_SPEED		0x18FC10
+#define P8_CB_STRUCT_OFFSET		0x39FC00
 
 /* Nest microcode Status */
 #define NEST_IMC_PAUSE		0x2

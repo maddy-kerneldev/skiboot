@@ -105,7 +105,7 @@ static struct imc_chip_cb *get_imc_cb(void)
 	uint64_t cb_loc;
 	struct proc_chip *chip = get_chip(this_cpu()->chip_id);
 
-	cb_loc = chip->homer_base + P9_CB_STRUCT_OFFSET;
+	cb_loc = chip->homer_base + P8_CB_STRUCT_OFFSET;
 	return (struct imc_chip_cb *)cb_loc;
 }
 
