@@ -215,10 +215,6 @@ void imc_init(void)
 	void *fdt = NULL;
 	struct dt_fixup_p parent;
 
-	/* Enable only for power 9 */
-	if (proc_gen != proc_gen_p9)
-		return;
-
 	buf = malloc(IMC_DTB_SIZE);
 	if (!buf) {
 		prerror("IMC: Memory allocation Failed\n");
