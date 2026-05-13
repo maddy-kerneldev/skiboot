@@ -1331,7 +1331,6 @@ void start_mem_region_clear_unused(void)
 {
 	struct mem_region *r;
 	uint64_t s,l;
-	uint64_t total = 0;
 	uint32_t chip_id;
 	char *path;
 	int i;
@@ -1372,7 +1371,6 @@ void start_mem_region_clear_unused(void)
 			job_args[i].e = s+l;
 			l-=MEM_REGION_CLEAR_JOB_SIZE;
 			job_args[i].job_name = malloc(sizeof(char)*100);
-			total+=MEM_REGION_CLEAR_JOB_SIZE;
 			chip_id = __dt_get_chip_id(r->node);
 			if (chip_id == -1)
 				chip_id = 0;
@@ -1399,7 +1397,6 @@ void start_mem_region_clear_unused(void)
 		job_args[i].s = s;
 		job_args[i].e = s+l;
 		job_args[i].job_name = malloc(sizeof(char)*100);
-		total+=l;
 		chip_id = __dt_get_chip_id(r->node);
 		if (chip_id == -1)
 			chip_id = 0;
