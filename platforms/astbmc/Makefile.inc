@@ -4,7 +4,7 @@ ASTBMC_OBJS = pnor.o common.o slots.o \
 	      witherspoon.o zaius.o romulus.o p9dsu.o \
 	      nicole.o mihawk.o mowgli.o \
 	      talos.o blackbird.o \
-	      swift.o rainier.o
+	      swift.o rainier.o fuji.o
 
 ifeq ($(CONFIG_P8),1)
 ASTBMC_OBJS += palmetto.o habanero.o firestone.o \
