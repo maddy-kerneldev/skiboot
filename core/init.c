@@ -43,6 +43,7 @@
 #include <libstb/trustedboot.h>
 #include <phys-map.h>
 #include <imc.h>
+#include <pmu.h>
 #include <dts.h>
 #include <dio-p9.h>
 #include <sbe-p9.h>
@@ -1445,6 +1446,9 @@ void __noreturn __nomcount main_cpu_entry(const void *fdt)
 
 	/* Init In-Memory Collection related stuff (load the IMC dtb into memory) */
 	imc_init();
+
+	/* Init PMU device tree nodes */
+	pmu_init();
 
 	/* Disable protected execution facility in BML */
 	cpu_disable_pef();
